@@ -59,6 +59,14 @@ async function bench() {
   const layout = new LayoutController(layoutStore.actions, id => id === 'plugins', {
     getSnapshot: () => layoutStore.getSnapshot().panelInfo,
     subscribe: listener => layoutStore.subscribe(listener),
+  }, {
+    getSnapshot: () => ({
+      viewportWidth: layoutStore.getSnapshot().layoutInfo.viewportWidth,
+      sidebarExpanded: layoutStore.getSnapshot().layoutInfo.sidebar !== 0,
+      composerOpeners: false,
+      narrowPanels: false,
+    }),
+    subscribe: listener => layoutStore.subscribe(listener),
   })
   ctx.provide('layout', layout)
   ctx.provide('sessions', { list })

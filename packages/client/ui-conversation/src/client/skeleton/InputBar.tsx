@@ -522,6 +522,11 @@ export const InputBar = memo(function InputBar({
           ? renderSlot('conversation.composer.dock', {})
           : null}
         {activity ? null : <ContextMeter useProjection={useProjection} t={t} />}
+        {/* Frame navigation, below the turn/step/token readouts. Unlike
+            `conversation.composer.dock` this renders on every variant: the
+            landing surface is where a phone most needs the controls, and a
+            Session has not started there yet. */}
+        {renderSlot('conversation.composer.controls', {})}
       </div>
     </div>
   )

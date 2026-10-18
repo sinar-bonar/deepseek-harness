@@ -29,6 +29,7 @@ import type {
 } from './shell-contract.ts'
 import type { ShortcutCommandId } from '@deepseek-ai/dsh-client-shortcuts/client'
 import { createSettingsShellStore } from './shell-store.ts'
+import type { SettingsPanelService } from './settings-panel-service.ts'
 import { SettingsRoot } from './SettingsRoot.tsx'
 import { DesktopUpdateBadge } from './DesktopUpdateIndicator.tsx'
 import type { DesktopUpdateBridge } from '../types.ts'
@@ -63,6 +64,13 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
 
 /** Dictionary namespace owned by this plugin (shell chrome + General copy). */
 const NS = 'settings'
+
+declare module '@deepseek-ai/cordis' {
+  interface Context {
+    /** Presents the Settings surface; provided by this plugin while the sidebar occupant is mounted. */
+    settingsPanel: SettingsPanelService
+  }
+}
 
 /**
  * Required services (cordis fiber inject). The target slots are declared by
@@ -176,9 +184,20 @@ export function apply(ctx: ClientContext): void {
       },
     },
   })
+  // The surface is body-portaled and mounts once, so its store lives here rather
+  // than inside the slot registration: `slots.inject` reruns whenever the sidebar
+  // redeclares the seat (a reload does), and a service published from inside it
+  // would be registered a second time.
+  const shellInstance = createSettingsShellStore().create()
+  ctx.provide('settingsPanel', {
+    open: sectionId => {
+      if (sectionId === undefined) shellInstance.actions.open()
+      else shellInstance.actions.openSection(sectionId)
+    },
+    close: () => { shellInstance.actions.close() },
+  } satisfies SettingsPanelService)
   ctx.slots.inject('sidebar.settings', () => {
     const shellHandle = createSettingsShellStore()
-    const shellInstance = shellHandle.create()
     const shellStore: typeof shellHandle = { ...shellHandle, create: () => shellInstance }
     const disposeCommand = ctx.shortcuts.register({
       id: 'settings.open' as ShortcutCommandId, label: () => t('shortcut.open'), aliases: ['settings', 'preferences'],

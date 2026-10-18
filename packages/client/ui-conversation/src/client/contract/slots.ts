@@ -274,6 +274,8 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
     'conversation.composer.dock': { kind: 'list'; scope: 'session' }
     /** Compact controls at the left of the composer tool row. */
     'conversation.input.left': { kind: 'list'; scope: 'session' }
+    /** Frame-navigation controls below the composer card, on every variant. */
+    'conversation.composer.controls': { kind: 'list'; scope: 'root' }
     /** Compact controls before the composer submit action. */
     'conversation.input.right': { kind: 'list'; scope: 'session' }
     /** Compact action after the model selector; it can expand across the toolbar while retaining the editor and submit action. */
@@ -501,6 +503,7 @@ export type ComposerBarProps =
     | 'conversation.input.attachments' | 'conversation.input.overlay'
     | 'conversation.input.permission'
     | 'conversation.input.left' | 'conversation.input.plan'
+    | 'conversation.composer.controls'
     | 'conversation.input.right' | 'conversation.input.model' | 'conversation.input.activity'
     | 'conversation.composer.dock'
   >

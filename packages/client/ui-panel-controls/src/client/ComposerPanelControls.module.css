@@ -1,0 +1,46 @@
+/* Frame-navigation buttons in the dock row below the composer's turn, step and
+   token readouts. Icon-only, at the rail's own control size, so the strip reads
+   as the rail the frame dropped rather than as composer actions. The full-basis
+   flex item takes its own line inside the wrapping dock. */
+.row {
+  display: flex;
+  flex: 1 0 100%;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  min-width: 0;
+}
+
+.button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  inline-size: 28px;
+  block-size: 28px;
+  flex: none;
+  padding: 0;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--dsw-alias-text-2, inherit);
+  font: inherit;
+  cursor: pointer;
+}
+
+.button:hover {
+  background: var(--dsw-alias-interactive-bg-hover, rgb(127 127 127 / 0.12));
+}
+
+.button:active {
+  background: var(--dsw-alias-interactive-bg-active, rgb(127 127 127 / 0.2));
+}
+
+.button:focus-visible {
+  outline: 2px solid var(--dsw-alias-border-focus, currentColor);
+  outline-offset: 1px;
+}
+
+.glyph {
+  display: block;
+  flex: none;
+}

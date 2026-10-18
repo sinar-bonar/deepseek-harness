@@ -266,6 +266,11 @@
     - id: ui-layout
       name: '@deepseek-ai/dsh-client-ui-layout'
 
+    # Panel opener for viewports too narrow to keep the sidebar rail; sits in
+    # the composer dock because ui-conversation already imports ui-layout.
+    - id: ui-panel-controls
+      name: '@deepseek-ai/dsh-client-ui-panel-controls'
+
     - id: ui-renderer
       name: '@deepseek-ai/dsh-client-ui-renderer'
 

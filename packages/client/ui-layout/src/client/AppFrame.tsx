@@ -19,8 +19,9 @@ import type { ReactNode } from 'react'
 import type {
   PropsLocale, PropsRenderSlots, PropsRuntime, PropsStore,
 } from '@deepseek-ai/dsh-client-ui-slots'
-import { CENTER_MIN, clampWidth, computeColumns, RIGHTBAR_DEFAULT_RATIO, RIGHTBAR_MAX_RATIO, RIGHTBAR_MIN, SIDEBAR_AUTO_COLLAPSE, SIDEBAR_COLLAPSED, SIDEBAR_DEFAULT } from './columns.ts'
+import { CENTER_MIN, clampWidth, computeColumns, PANEL_SHEET_MAX, RIGHTBAR_DEFAULT_RATIO, RIGHTBAR_MAX_RATIO, RIGHTBAR_MIN, SIDEBAR_AUTO_COLLAPSE, SIDEBAR_COLLAPSED, SIDEBAR_DEFAULT } from './columns.ts'
 import { DocumentTitle } from './DocumentTitle.tsx'
+import type { MainPanelId } from './service.ts'
 import type { createLayoutStore } from './stores.ts'
 import css from './AppFrame.module.css'
 
@@ -36,9 +37,8 @@ function CenterColumn(props: { children?: ReactNode }) {
   return <div className={css.centerCol}>{props.children}</div>
 }
 
-/** Subscribe to the main key without subscribing the column frame to each panel id. */
-function MainPanel({ usePanelInfo, renderSlot }: Pick<PropsRuntime<'root'>, 'usePanelInfo'> & PropsRenderSlots<'main'>) {
-  const panelId = usePanelInfo(info => info.activePanelId)
+/** Subscribe once in the frame and render the main outlet from that value. */
+function MainPanel({ panelId, renderSlot }: { panelId: MainPanelId | null } & PropsRenderSlots<'main'>) {
   return renderSlot('main', {}, { entryKey: panelId ?? 'conversation' })
 }
 
@@ -127,6 +127,7 @@ export function AppFrame({
   t,
 }: AppFrameProps) {
   const layoutInfo = useStore(state => state.layoutInfo)
+  const activePanelId = usePanelInfo(info => info.activePanelId)
   const frameRef = useRef<HTMLDivElement | null>(null)
   const viewport = layoutInfo.viewportWidth
 
@@ -172,6 +173,31 @@ export function AppFrame({
   // include that space before the occupant's first shown report arrives.
   const normal = computeColumns(viewport, !layoutInfo.rightbarShown && narrow ? 0 : sidebarPreference, rightbarPreference, collapsedWidth)
   const cols = computeColumns(viewport, sidebarPreference, layoutInfo.rightbarTrack ? rightbarPreference : 0, collapsedWidth)
+  // Below the sheet breakpoint a shown panel leaves its grid track and floats
+  // over the center, which keeps the conversation's full width. A tracked 264px
+  // sidebar or 300px right panel on a phone would leave roughly 126px of usable
+  // width. Every side track closes here, the rail included: the composer grows
+  // the open controls instead, because a rail spends width the phone does not
+  // have.
+  const sheetMode = viewport <= PANEL_SHEET_MAX
+  const sidebarSheet = sheetMode && !sidebarCollapsed
+  const rightbarSheet = sheetMode && layoutInfo.rightbarShown && layoutInfo.rightbarTrack
+  // A selected main panel is a page on a desktop column, so on a phone it
+  // becomes a sheet over the conversation instead of replacing it: the
+  // conversation stays the surface behind, and dismissing the sheet returns to
+  // it. Only a selected panel gets a sheet — the Conversation is the base.
+  const panelSheet = sheetMode && activePanelId !== null
+  // One scrim covers the center for whichever sheet is open. Closing collapses
+  // the sidebar through a direct write rather than toggleSidebar, which would
+  // flip the state back open if a tap ever landed twice before a re-render.
+  // The right panel's expanded flag is occupant-owned, so it closes through the
+  // actions the occupant already reports against.
+  const closeSheets = useCallback(() => {
+    actions.collapseSidebar()
+    actions.closeRightbar()
+    actions.selectPanel(null)
+  }, [actions])
+  const sheetOpen = sidebarSheet || rightbarSheet || panelSheet
   const colsRef = useRef(cols)
   colsRef.current = cols
   const rightbarWidth = useRef(normal.rightbar)
@@ -240,12 +266,21 @@ export function AppFrame({
   // the discrete decisions (track present, collapse state) and the drag base.
   const rightbarMax = cols.rightbar === 0 ? 0 : clampWidth(rightbarPreference, RIGHTBAR_MIN, viewport * RIGHTBAR_MAX_RATIO)
   const sidebar = useMemo(() => renderSlot('sidebar', {
+    // A closed phone rail owns no width. An open sheet does: the occupant lays
+    // itself out at the width it is handed, and a zero width would render the
+    // wide sidebar as a clipped rail inside the sheet.
     collapsed: sidebarCollapsed,
-    width: cols.sidebar,
-  }), [renderSlot, sidebarCollapsed, cols.sidebar])
+    width: sheetMode ? (sidebarSheet ? viewport : 0) : cols.sidebar,
+  }), [renderSlot, sidebarCollapsed, sheetMode, sidebarSheet, viewport, cols.sidebar])
   const main = useMemo(() => (
-    <MainPanel usePanelInfo={usePanelInfo} renderSlot={renderSlot} />
-  ), [usePanelInfo, renderSlot])
+    <MainPanel panelId={activePanelId} renderSlot={renderSlot} />
+  ), [activePanelId, renderSlot])
+  // The base surface under an open panel sheet. Rendering the Conversation
+  // explicitly keeps one panel mounted: the sheet owns the selected panel.
+  const conversation = useMemo(
+    () => (panelSheet ? renderSlot('main', {}, { entryKey: 'conversation' }) : null),
+    [renderSlot, panelSheet],
+  )
   const overlays = useMemo(() => renderSlot('shell.overlay', {}), [renderSlot])
   // Window-chrome seat over the main panels' top-left corner: only a fully
   // hidden sidebar column on macOS desktop leaves window chrome without a
@@ -262,10 +297,13 @@ export function AppFrame({
       style={{
         ...(document.documentElement.hasAttribute('data-windows-titlebar')
           ? { '--dsh-windows-sidebar-width': `${cols.sidebar}px` } : {}),
-        gridTemplateColumns:
-          `${cols.sidebar}px minmax(${cols.rightbar === 0 ? 0 : CENTER_MIN}px, 1fr) minmax(0px, ${rightbarMax}px)`,
+        gridTemplateColumns: sheetMode
+          ? '0px minmax(0px, 1fr) 0px'
+          : `${cols.sidebar}px minmax(${cols.rightbar === 0 ? 0 : CENTER_MIN}px, 1fr) minmax(0px, ${rightbarMax}px)`,
       }}
       data-sidebar-collapsed={sidebarCollapsed || undefined}
+      data-sidebar-sheet={sidebarSheet || undefined}
+      data-rightbar-sheet={rightbarSheet || undefined}
       data-rightbar-collapsed={cols.rightbar === 0 || undefined}
       data-rightbar-fullscreen={layoutInfo.rightbarFullscreen || undefined}
       data-rightbar-instant={layoutInfo.rightbarInstant || undefined}
@@ -277,15 +315,37 @@ export function AppFrame({
         useSessions={useSessions}
         usePanelInfo={usePanelInfo}
       />
+      {/* Phone sheet scrim. A real element rather than a pseudo-element so the
+          tap target can close the open panel; a sheet is modal on a phone, and
+          leaving the conversation greyed out with no way back would trap the
+          user. It sits below both sheet layers and above the center. */}
+      {sheetOpen && (
+        <button
+          type="button"
+          className={css.sheetScrim}
+          data-shell-sheet-scrim
+          aria-label={t('panel.close')}
+          onClick={closeSheets}
+        />
+      )}
       <div className={css.sidebarCol}>
         {sidebar}
       </div>
       <>
-        <CenterColumn>{main}</CenterColumn>
+        <CenterColumn>{panelSheet ? conversation : main}</CenterColumn>
         <RightbarColumn>
           {renderSlot('rightbar', { width: normal.rightbar, viewportWidth: viewport, canShow: normal.rightbar > 0 })}
         </RightbarColumn>
       </>
+      {/* A selected panel on a phone floats over the conversation instead of
+          replacing it. The scrim above is the dismiss target. */}
+      {panelSheet && (
+        <div className={css.panelSheet} data-main-panel-sheet>
+          <div className={css.panelSheetBody}>
+            {main}
+          </div>
+        </div>
+      )}
       <div className={css.bottomRow} data-shell-bottom>
         {renderSlot('shell.bottom', {})}
       </div>
@@ -298,8 +358,10 @@ export function AppFrame({
         </div>
       )}
       {/* The collapsed rail is fixed-width: no resize handle while closed. */}
-      {!sidebarCollapsed && <DragHandle side="sidebar" left={cols.sidebar} onStart={onSidebarStart} onDrag={onSidebarDrag} onEnd={onDragEnd} />}
-      {layoutInfo.rightbarShown && !layoutInfo.rightbarFullscreen && normal.rightbar > 0 && (
+      {/* A sheet has no grid track to drag against, and its width is solved by
+          the sheet's own CSS. */}
+      {!sidebarCollapsed && !sidebarSheet && <DragHandle side="sidebar" left={cols.sidebar} onStart={onSidebarStart} onDrag={onSidebarDrag} onEnd={onDragEnd} />}
+      {layoutInfo.rightbarShown && !layoutInfo.rightbarFullscreen && normal.rightbar > 0 && !rightbarSheet && (
         <DragHandle side="rightbar" left={viewport - normal.rightbar} onStart={onRightbarStart} onDrag={onRightbarDrag} onEnd={onDragEnd} />
       )}
     </div>

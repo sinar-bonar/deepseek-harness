@@ -21,6 +21,20 @@ export const SIDEBAR_COLLAPSED = 56
  * LG breakpoint); a manual toggle below it re-expands over the squeezed center
  * (stores.ts narrowExpanded). */
 export const SIDEBAR_AUTO_COLLAPSE = 1024
+/** Viewport width below which a panel detaches from its grid track and becomes
+ * a floating sheet, and below which the composer carries the panel opener bar.
+ * A 264px sidebar or 300px right panel track at this width leaves roughly 126px
+ * of conversation, so a tracked panel is unusable here. Phones are tall and
+ * narrow: a bottom sheet spends height that is plentiful and keeps every pixel
+ * of width for the conversation. */
+export const PANEL_SHEET_MAX = 640
+/** Viewport width below which the Settings panel leaves its centered modal for a
+ * bottom sheet with the section nav laid out as a horizontal tab strip. A
+ * centered 760x500 dialog does not fit a phone: the modal's nav rail costs the
+ * width the content needs, and its fixed height fights the on-screen keyboard.
+ * Reuses the panel breakpoint so every narrow-screen panel change shares one
+ * number. */
+export const SETTINGS_SHEET_MAX = PANEL_SHEET_MAX
 /** Right column drag clamp floor. */
 export const RIGHTBAR_MIN = 300
 /** Maximum normal right panel width as a fraction of the frame. */

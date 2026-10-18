@@ -67,6 +67,11 @@
   justify-content: center;
 }
 
+/* A sheet is anchored to the bottom edge, so the overlay stops centering. */
+.overlay:has(.sheet) {
+  align-items: flex-end;
+}
+
 /* The full-viewport overlay blocks background clicks above the painted mask too. */
 .mask {
   position: absolute;
@@ -104,6 +109,87 @@
 
 .panel:focus {
   outline: none;
+}
+
+/* Phone surface: the centered dialog becomes a bottom sheet and the section nav
+   becomes a horizontal tab strip. A 760px-wide modal cannot fit this viewport,
+   and a vertical rail would spend the width the section content needs. */
+.panel.sheet {
+  flex-direction: column;
+  width: 100%;
+  height: 88svh;
+  max-width: 100%;
+  max-height: 88svh;
+  border-radius: 12px 12px 0 0;
+}
+
+.nav.navTabs {
+  flex: none;
+  flex-direction: column;
+  width: 100%;
+  padding: 14px 12px 0;
+}
+
+/* The panel title stays visible above the tabs; the tab strip scrolls
+   sideways when sections outnumber the width, which keeps every section
+   reachable on a phone without wrapping into a tall block. The right padding
+   keeps the title clear of the absolutely positioned close control. */
+.tabLabel {
+  display: block;
+  padding: 0 40px 8px 2px;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+/* Two classes so this beats the later single-class `.navList` base rule. */
+.navList.tabList {
+  flex-direction: row;
+  gap: 2px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: none;
+  padding-bottom: 0;
+}
+
+.tabList::-webkit-scrollbar {
+  display: none;
+}
+
+.navCell.tab {
+  flex: none;
+  width: auto;
+  border-radius: 8px 8px 0 0;
+  padding: 8px 12px;
+}
+
+.navCell.tab .navIcon {
+  display: none;
+}
+
+.navCell.tab.active {
+  box-shadow: inset 0 -2px 0 0 var(--dsw-alias-text-1, currentColor);
+}
+
+/* The close control leaves the content header's flow on a sheet: it floats at
+   the panel's top-right, above the tab strip, instead of opening a gap between
+   the tabs and the section content. */
+.panel.sheet .header {
+  position: absolute;
+  top: 8px;
+  right: 10px;
+  z-index: 2;
+  height: auto;
+  padding: 0;
+}
+
+.panel.sheet .content {
+  flex: 1;
+  min-height: 0;
+}
+
+.panel.sheet .options {
+  min-height: 0;
+  padding: 4px 16px 16px;
 }
 
 /* Nav rail (figma .Setting-nav 501:29958): 188 wide, pad (12,22,12,0),

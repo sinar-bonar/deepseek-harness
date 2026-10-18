@@ -6,12 +6,12 @@ import { Context, type Fiber } from '@deepseek-ai/cordis'
 import { stubConfigForm } from '@deepseek-ai/dsh-client-test-runtime'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { SlotRegistry } from '@deepseek-ai/dsh-client-ui-renderer/client'
-import type { SlotRendererHost } from '@deepseek-ai/dsh-client-ui-slots'
+import type { HostObservable, SlotRendererHost } from '@deepseek-ai/dsh-client-ui-slots'
 import { LocaleRuntime } from '@deepseek-ai/dsh-client-locale/client'
 import { apply as themeApply, inject as themeInject, ThemeRuntime } from '@deepseek-ai/dsh-client-ui-theme/client'
 import { apply, inject, LayoutController } from '@deepseek-ai/dsh-client-ui-layout/client'
 import { apply as nodeApply } from '@deepseek-ai/dsh-client-ui-layout'
-import type { MainPanelId } from '../src/client/service.ts'
+import type { MainPanelId, PanelGeometry } from '../src/client/service.ts'
 import type { createLayoutStore } from '../src/client/stores.ts'
 
 const owners = new Set<Fiber>()
@@ -111,6 +111,8 @@ describe('ui-layout client apply', () => {
     const panelInfo = host.root.getSnapshot().hooks.panelInfo!
     expect(panelInfo).toBe(layout.panelInfo)
     expect(panelInfo.getSnapshot()).toBe(instance.getSnapshot().panelInfo)
+    const geometry = host.root.getSnapshot().hooks.panelGeometry!
+    expect(geometry).toBe(layout.panelGeometry)
     const panelId = 'panel-a' as MainPanelId
     const disposePanel = slots.register({ name: 'main', key: panelId }, () => null)
     layout.selectPanel(panelId)
@@ -122,6 +124,57 @@ describe('ui-layout client apply', () => {
     const pending = layout.beginNavigation()
     await fiber.dispose()
     expect(pending.aborted).toBe(true)
+  })
+
+  it('publishes composer openers only while a phone-width frame keeps the panel closed', async () => {
+    const { ctx, slots, rendererHost } = await bench()
+    const fiber = ctx.plugin({ inject: [...inject], apply })
+    await fiber.await()
+    const geometry = rendererHost().root.getSnapshot().hooks.panelGeometry as HostObservable<PanelGeometry>
+    const instance = (slots.entries('root')[0]!.store as ReturnType<typeof createLayoutStore>).create()
+    // Wide: the rail carries the opener, so the composer stays clear.
+    expect(geometry.getSnapshot().composerOpeners).toBe(false)
+    instance.actions.setViewportWidth(480)
+    // Phone width with the panel closed: the composer takes over.
+    expect(geometry.getSnapshot()).toEqual({ viewportWidth: 480, sidebarExpanded: false, composerOpeners: true, narrowPanels: true })
+    instance.actions.toggleSidebar()
+    // Open sheet: its scrim is already the way back, so the seat withdraws.
+    expect(geometry.getSnapshot()).toEqual({ viewportWidth: 480, sidebarExpanded: true, composerOpeners: false, narrowPanels: true })
+    instance.actions.toggleSidebar()
+    // Back to a rail width with the sidebar re-expanded by the toggle: the
+    // frame's own control is back, and the composer seat stays out of the way.
+    instance.actions.setViewportWidth(1440)
+    expect(geometry.getSnapshot()).toEqual({ viewportWidth: 1440, sidebarExpanded: true, composerOpeners: false, narrowPanels: false })
+    // A wide frame with the sidebar closed still has its rail, so the composer
+    // seat must not appear there either.
+    instance.actions.toggleSidebar()
+    expect(geometry.getSnapshot()).toEqual({ viewportWidth: 1440, sidebarExpanded: false, composerOpeners: false, narrowPanels: false })
+    await fiber.dispose()
+  })
+
+  it('closes the sidebar sheet when a panel is selected on a phone frame', async () => {
+    const { ctx, slots, rendererHost } = await bench()
+    const fiber = ctx.plugin({ inject: [...inject], apply })
+    await fiber.await()
+    const geometry = rendererHost().root.getSnapshot().hooks.panelGeometry as HostObservable<PanelGeometry>
+    const instance = (slots.entries('root')[0]!.store as ReturnType<typeof createLayoutStore>).create()
+    instance.actions.setViewportWidth(480)
+    expect(geometry.getSnapshot().composerOpeners).toBe(true)
+    const panelId = 'panel-sheet' as MainPanelId
+    const disposePanel = slots.register({ name: 'main', key: panelId }, () => null)
+    // The selected panel is shown in its own sheet, so an open sidebar sheet
+    // must yield instead of covering it.
+    instance.actions.presentSidebarSheet()
+    expect(geometry.getSnapshot().sidebarExpanded).toBe(true)
+    ctx.get('layout')!.selectPanel(panelId)
+    expect(geometry.getSnapshot()).toEqual({ viewportWidth: 480, sidebarExpanded: false, composerOpeners: true, narrowPanels: true })
+    // A wide frame keeps its track, so selection leaves the sidebar state alone.
+    instance.actions.setViewportWidth(1440)
+    instance.actions.setSidebar(280)
+    ctx.get('layout')!.selectPanel(panelId)
+    expect(geometry.getSnapshot()).toEqual({ viewportWidth: 1440, sidebarExpanded: true, composerOpeners: false, narrowPanels: false })
+    disposePanel()
+    await fiber.dispose()
   })
 
   it('theme presenter applies the initial snapshot, follows theme/change, and unwinds on dispose', async () => {
@@ -155,6 +208,7 @@ describe('ui-layout client apply', () => {
     await fiber.await()
     const host = rendererHost()
     expect(host.root.getSnapshot().hooks.panelInfo).toBeDefined()
+    expect(host.root.getSnapshot().hooks.panelGeometry).toBeDefined()
     await fiber.dispose()
     expect(ctx.get('layout')).toBeUndefined()
     expect(slots.entries('root')).toHaveLength(0)
@@ -165,6 +219,7 @@ describe('ui-layout client apply', () => {
     expect(slots.spec('shell.overlay')).toBeUndefined()
     expect(slots.spec('shell.leading')).toBeUndefined()
     expect(host.root.getSnapshot().hooks.panelInfo).toBeUndefined()
+    expect(host.root.getSnapshot().hooks.panelGeometry).toBeUndefined()
     // The built-in root declaration survives entry teardown (renderer-owned).
     expect(slots.spec('root')).toEqual({ kind: 'single', scope: 'root' })
   })

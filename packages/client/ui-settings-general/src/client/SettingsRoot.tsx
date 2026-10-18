@@ -44,18 +44,27 @@ type PanelProps = {
   activeId: string | undefined
   onSelect: (id: string) => void
   onClose: () => void
+  /** Frame geometry hook, threaded from the root seat; absent on a bare host. */
+  usePanelGeometry: SettingsRootComponentProps['usePanelGeometry']
 }
 
 /**
- * Body-portaled modal layer: full-viewport mask + centered panel. Close paths: the
- * header button, a mask click, and document-level Escape (mounted only while
- * open, so the listener lifetime is the panel's).
+ * Body-portaled layer: full-viewport mask plus the settings surface. Above the
+ * sheet breakpoint this is the centered modal with the section nav as a vertical
+ * rail; on a narrower viewport it is a bottom sheet whose nav becomes a
+ * horizontal tab strip, because a 760px dialog cannot fit a phone and its rail
+ * would spend the width the section content needs. Close paths are the header
+ * button, a mask click, and document-level Escape (mounted only while open, so
+ * the listener lifetime is the panel's).
  */
-function SettingsPanel({ rows, renderSlot, activeId, onSelect, onClose }: PanelProps) {
+function SettingsPanel({ rows, renderSlot, activeId, onSelect, onClose, usePanelGeometry }: PanelProps) {
   // Entries can unmount underneath the requested id, so the render-time
   // projection falls back to the first row when the id is gone.
   const active = rows.find(r => r.id === activeId)?.id ?? rows[0]?.id
   const titleId = useId()
+  // The frame owns the breakpoint so Settings cannot drift from the sidebar
+  // sheet it replaces; a host without the hook keeps the modal.
+  const narrow = usePanelGeometry?.(geometry => geometry.narrowPanels) ?? false
 
   const panel = useRef<HTMLDivElement>(null)
   useModalLayer(panel, true, onClose)
@@ -67,16 +76,30 @@ function SettingsPanel({ rows, renderSlot, activeId, onSelect, onClose }: PanelP
   return createPortal((
     <div className={css.overlay} role="presentation">
       <div className={css.mask} aria-hidden="true" onClick={onClose} />
-      <div ref={panel} tabIndex={-1} data-shortcut-modal="settings" className={css.panel} role="dialog" aria-modal="true" aria-labelledby={titleId}>
-        <nav className={css.nav}>
-          <div className={css.navTitle} id={titleId} tabIndex={-1}
-            data-modal-autofocus={active === undefined ? '' : undefined}>{renderSlot('settings.header', {})}</div>
-          <div className={css.navList}>
+      <div
+        ref={panel}
+        tabIndex={-1}
+        data-shortcut-modal="settings"
+        data-settings-layout={narrow ? 'sheet' : 'modal'}
+        className={clsx(css.panel, narrow && css.sheet)}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+      >
+        <nav className={clsx(css.nav, narrow && css.navTabs)} aria-label="Settings sections">
+          {narrow ? null : (
+            <div className={css.navTitle} id={titleId} tabIndex={-1}
+              data-modal-autofocus={active === undefined ? '' : undefined}>{renderSlot('settings.header', {})}</div>
+          )}
+          {narrow ? <span className={css.tabLabel} id={titleId}>{renderSlot('settings.header', {})}</span> : null}
+          <div className={clsx(css.navList, narrow && css.tabList)}>
             {rows.map(row => (
               <button
                 key={row.id}
                 type="button"
-                className={clsx(css.navCell, row.id === active && css.active)}
+                role={narrow ? 'tab' : undefined}
+                aria-selected={narrow ? row.id === active : undefined}
+                className={clsx(css.navCell, narrow && css.tab, row.id === active && css.active)}
                 aria-current={row.id === active ? 'true' : undefined}
                 data-modal-autofocus={row.id === active ? '' : undefined}
                 onClick={() => { onSelect(row.id) }}
@@ -112,7 +135,7 @@ function SettingsPanel({ rows, renderSlot, activeId, onSelect, onClose }: PanelP
 export function SettingsRoot(props: SettingsRootComponentProps) {
   const {
     wide, reconnect, useConnectionState, useSections, useOnboardingSteps, useSessions, renderSlot, t,
-    useDesktopUpdate, openDesktopUpdate, useStore, actions, useShortcuts,
+    useDesktopUpdate, openDesktopUpdate, useStore, actions, useShortcuts, usePanelGeometry,
   } = props
   const { open, activeId } = useStore(state => state)
   const shortcut = useShortcuts(rows => rows.find(row => row.id === 'settings.open'))
@@ -250,6 +273,7 @@ export function SettingsRoot(props: SettingsRootComponentProps) {
           activeId={activeId}
           onSelect={actions.select}
           onClose={close}
+          usePanelGeometry={usePanelGeometry}
         />
       )}
       {/* Dialog chrome and `#root` inert ownership live inside each step's

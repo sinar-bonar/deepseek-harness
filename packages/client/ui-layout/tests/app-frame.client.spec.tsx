@@ -279,7 +279,10 @@ describe('AppFrame', () => {
     for (const panelId of ['panel-a' as MainPanelId, 'panel-b' as MainPanelId, null]) {
       slotCalls.length = 0
       act(() => { instance.actions.selectPanel(panelId) })
-      expect(slotCalls).toEqual([{ key: 'main', props: {}, options: { entryKey: panelId ?? 'conversation' } }])
+      // The frame re-renders to decide whether the panel floats over the
+      // conversation, so sibling outlets re-render with it; only the main
+      // outlet changes its key.
+      expect(slotCalls.filter(call => call.key === 'main')).toEqual([{ key: 'main', props: {}, options: { entryKey: panelId ?? 'conversation' } }])
       expect(getByTestId('main-content').getAttribute('data-entry-key')).toBe(panelId ?? 'conversation')
       expect(instance.getSnapshot().panelInfo).toEqual({ activePanelId: panelId })
       expect(instance.getSnapshot().layoutInfo).toBe(layoutInfo)
@@ -318,7 +321,9 @@ describe('AppFrame normal width concessions', () => {
     expect(frame.querySelector('[data-side="rightbar"]')).toBeNull()
     expect(instance.getSnapshot().layoutInfo).toMatchObject({ rightbarShown: true, rightbar: 864 })
     act(() => { instance.actions.closeRightbar() })
-    resize(455)
+    // Above the sheet breakpoint: below it the panels leave the grid for
+    // bottom sheets, which the sheet specs cover separately.
+    resize(700)
     expect(tracks(frame)).toEqual([56, 0])
     resize(1920)
     expect(tracks(frame)).toEqual([420, 0])
@@ -374,6 +379,59 @@ describe('AppFrame normal width concessions', () => {
     act(() => { instance.actions.toggleSidebar() })
     expect(tracks(frame)[0]).toBe(280)
     expect(instance.getSnapshot().layoutInfo.sidebar).toBe(0)
+  })
+})
+
+describe('AppFrame phone sheets', () => {
+  it('floats an expanded sidebar as a sheet below the breakpoint and restores the track above it', () => {
+    const { frame, instance } = mountFrame()
+    expect(frame.dataset.sidebarSheet).toBeUndefined()
+    // Narrow: auto-collapsed, so no sheet yet. The rail is gone at this width
+    // and the composer carries the opener instead.
+    resize(480)
+    expect(frame.dataset.sidebarSheet).toBeUndefined()
+    act(() => { instance.actions.toggleSidebar() })
+    expect(frame.dataset.sidebarSheet).toBe('true')
+    // Both side tracks collapse so the center keeps the full viewport width.
+    expect(frame.style.gridTemplateColumns).toBe('0px minmax(0px, 1fr) 0px')
+    // No resize handle: a sheet has no grid track to drag against.
+    expect(frame.querySelector('[data-side="sidebar"]')).toBeNull()
+    resize(900)
+    expect(frame.dataset.sidebarSheet).toBeUndefined()
+    expect(tracks(frame)[0]).toBe(280)
+  })
+
+  it('floats a tracked right panel as a sheet while the sidebar stays collapsed', () => {
+    const { frame, instance } = mountFrame()
+    act(() => { instance.actions.openRightbar(true, false) })
+    resize(480)
+    expect(frame.dataset.rightbarSheet).toBe('true')
+    expect(frame.style.gridTemplateColumns).toBe('0px minmax(0px, 1fr) 0px')
+    expect(frame.querySelector('[data-side="rightbar"]')).toBeNull()
+  })
+
+  it('dismisses both sheets through the scrim and never reopens on a repeated tap', () => {
+    const { frame, instance } = mountFrame()
+    act(() => { instance.actions.toggleSidebar(); instance.actions.openRightbar(true, false) })
+    resize(480)
+    const scrim = () => frame.querySelector<HTMLElement>('[data-shell-sheet-scrim]')
+    expect(scrim()).not.toBeNull()
+    act(() => { scrim()!.click() })
+    const state = instance.getSnapshot().layoutInfo
+    expect(state.narrowExpanded).toBe(false)
+    expect(state.rightbarShown).toBe(false)
+    expect(frame.dataset.sidebarSheet).toBeUndefined()
+    expect(frame.dataset.rightbarSheet).toBeUndefined()
+    expect(scrim()).toBeNull()
+  })
+
+  it('shows no scrim while both panels are closed or the frame is wide', () => {
+    const { frame, instance } = mountFrame()
+    resize(480)
+    expect(frame.querySelector('[data-shell-sheet-scrim]')).toBeNull()
+    resize(1920)
+    act(() => { instance.actions.toggleSidebar() })
+    expect(frame.querySelector('[data-shell-sheet-scrim]')).toBeNull()
   })
 })
 

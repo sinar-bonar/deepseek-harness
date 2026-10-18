@@ -60,6 +60,8 @@ type LayoutActions = {
   retainMainPanels: (draft: LayoutState, panelIds: readonly string[]) => void
   setSidebar: (draft: LayoutState, px: number) => void
   toggleSidebar: (draft: LayoutState) => void
+  collapseSidebar: (draft: LayoutState) => void
+  presentSidebarSheet: (draft: LayoutState) => void
   setViewportWidth: (draft: LayoutState, width: number) => void
   setRightbar: (draft: LayoutState, px: number) => void
   openRightbar: (draft: LayoutState, track: boolean, fullscreen: boolean) => void
@@ -109,6 +111,21 @@ export function createLayoutStore(): EngineStoreHandle<LayoutState, LayoutAction
         d.layoutInfo.rightbarInstant = false
         if (d.layoutInfo.viewportWidth < SIDEBAR_AUTO_COLLAPSE) d.layoutInfo.narrowExpanded = !d.layoutInfo.narrowExpanded
         else d.layoutInfo.sidebar = d.layoutInfo.sidebar === 0 ? SIDEBAR_DEFAULT : 0
+      },
+      // Idempotent counterpart to toggleSidebar for dismiss gestures (a scrim
+      // tap): a double tap must land on the same collapsed state, never reopen.
+      collapseSidebar: (d) => {
+        d.layoutInfo.rightbarInstant = false
+        if (d.layoutInfo.viewportWidth < SIDEBAR_AUTO_COLLAPSE) d.layoutInfo.narrowExpanded = false
+        else d.layoutInfo.sidebar = 0
+      },
+      // Idempotent opener for a caller whose request means "show me this panel"
+      // — selecting one from the composer cannot be invisible behind a closed
+      // sheet. Mirror of collapseSidebar, so a repeated request never toggles.
+      presentSidebarSheet: (d) => {
+        d.layoutInfo.rightbarInstant = false
+        if (d.layoutInfo.viewportWidth < SIDEBAR_AUTO_COLLAPSE) d.layoutInfo.narrowExpanded = true
+        else if (d.layoutInfo.sidebar === 0) d.layoutInfo.sidebar = SIDEBAR_DEFAULT
       },
       // Crossing the breakpoint in either direction drops the override: the
       // narrow default is auto-collapsed, the wide state is the preference.
