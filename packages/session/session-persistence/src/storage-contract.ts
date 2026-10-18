@@ -53,19 +53,6 @@ export function assertVersion(
 }
 
 /**
- * Event types written by a newer harness that this older checkout can safely
- * ignore while reading. The envelope's persisted `ignorable` marker is the
- * designed compatibility mechanism for event types outside this build; these
- * writers predate carrying it, so this local build stamps it on read instead of
- * refusing the whole log. Remove this shim once the checkout matches the
- * installed application's session format.
- */
-const NEWER_HARNESS_IGNORABLE_EVENT_TYPES: ReadonlySet<string> = new Set([
-  'job/registered',
-  'job/settled',
-])
-
-/**
  * Validate one exclusively owned stored event array in place: adopt each
  * record (validating and freezing it) and refuse any event type this build
  * does not know, unless its writer marked it `ignorable: true` — silently
@@ -84,17 +71,12 @@ export function validateStoredEvents(
   events: SessionEvent[],
   location?: SessionLocation,
 ): SessionEvent[] {
-  for (let index = 0; index < events.length; index++) {
-    let event = events[index] as SessionEvent
+  for (const event of events) {
     if (!KNOWN_SESSION_EVENT_TYPES.has(event.type) && event.ignorable !== true) {
-      if (!NEWER_HARNESS_IGNORABLE_EVENT_TYPES.has(event.type)) {
-        throw unsupported(
-          `session "${meta.id}" contains event type "${event.type}" (seq ${event.seq}) unknown to this harness and not marked ignorable; refusing to interpret the log — it was likely written by a newer harness`,
-          location,
-        )
-      }
-      event = { ...event, ignorable: true } as SessionEvent
-      events[index] = event
+      throw unsupported(
+        `session "${meta.id}" contains event type "${event.type}" (seq ${event.seq}) unknown to this harness and not marked ignorable; refusing to interpret the log — it was likely written by a newer harness`,
+        location,
+      )
     }
     // The one retired shape hiding under a known type: the removed delta codec's
     // full-header "fallback" reason. Everything else retired was a whole type.
