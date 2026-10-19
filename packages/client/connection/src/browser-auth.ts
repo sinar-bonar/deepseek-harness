@@ -135,7 +135,7 @@ function sessionCookie(
   maxAgeSeconds: number,
   secure: boolean,
 ): string {
-  const attributes = `${name}=${value}; Max-Age=${String(maxAgeSeconds)}; Path=/; Expires=${new Date(expiresAt).toUTCString()}; HttpOnly; SameSite=Strict`
+  const attributes = `${name}=${value}; Max-Age=${String(maxAgeSeconds)}; Path=/; Expires=${new Date(expiresAt).toUTCString()}; HttpOnly; SameSite=Lax`
   return secure ? `${attributes}; Secure` : attributes
 }
 
