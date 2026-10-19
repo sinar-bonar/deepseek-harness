@@ -62,13 +62,32 @@ describe('LayoutController', () => {
     expect(panels.toggleSidebar).not.toHaveBeenCalled()
     expect(panels.openRightbar).not.toHaveBeenCalled()
     expect(panels.closeRightbar).not.toHaveBeenCalled()
+    // A wide frame keeps its sidebar: it covers nothing there.
+    expect(panels.collapseSidebar).not.toHaveBeenCalled()
+  })
+
+  it('dismisses the phone sidebar sheet for any selection, the Conversation included', () => {
+    const panels = fakePanels()
+    const narrow: PanelGeometry = { viewportWidth: 480, sidebarExpanded: true, composerOpeners: false, narrowPanels: true }
+    const service = new LayoutController(panels, () => true, createSnapshotStore({ activePanelId: null }), createSnapshotStore(narrow))
+
+    // Tapping a Session row in the sheet returns to the Conversation; the sheet
+    // covers it, so the same dismissal applies as when a panel takes the front.
+    service.selectPanel(null)
+    service.selectPanel('panel-a' as MainPanelId)
+
+    expect(panels.collapseSidebar).toHaveBeenCalledTimes(2)
   })
 
   it('keeps separately constructed controllers bound to their own instances', () => {
     const first = fakePanels()
     const second = fakePanels()
-    const firstService = new LayoutController(first, () => true, createSnapshotStore({ activePanelId: null }), createSnapshotStore(GEOMETRY))
-    const secondService = new LayoutController(second, () => true, createSnapshotStore({ activePanelId: null }), createSnapshotStore(GEOMETRY))
+    const firstService = new LayoutController(
+      first, () => true, createSnapshotStore({ activePanelId: null }), createSnapshotStore(GEOMETRY),
+    )
+    const secondService = new LayoutController(
+      second, () => true, createSnapshotStore({ activePanelId: null }), createSnapshotStore(GEOMETRY),
+    )
     firstService.toggleSidebar()
     expect(first.toggleSidebar).toHaveBeenCalledTimes(1)
     expect(second.toggleSidebar).not.toHaveBeenCalled()
@@ -80,7 +99,9 @@ describe('LayoutController', () => {
   it('rejects an absent main entry without changing selection or cancelling pending navigation', () => {
     const panels = fakePanels()
     const present = new Set(['panel-a'])
-    const service = new LayoutController(panels, id => present.has(id), createSnapshotStore({ activePanelId: null }), createSnapshotStore(GEOMETRY))
+    const service = new LayoutController(
+      panels, id => present.has(id), createSnapshotStore({ activePanelId: null }), createSnapshotStore(GEOMETRY),
+    )
     service.selectPanel('panel-a' as MainPanelId)
     const navigation = service.beginNavigation()
     present.delete('panel-a')
@@ -92,7 +113,9 @@ describe('LayoutController', () => {
   })
 
   it('supersedes asynchronous navigation on another request, any valid selection, and disposal', () => {
-    const service = new LayoutController(fakePanels(), () => true, createSnapshotStore({ activePanelId: null }), createSnapshotStore(GEOMETRY))
+    const service = new LayoutController(
+      fakePanels(), () => true, createSnapshotStore({ activePanelId: null }), createSnapshotStore(GEOMETRY),
+    )
     const first = service.beginNavigation()
     const second = service.beginNavigation()
     expect(first.aborted).toBe(true)

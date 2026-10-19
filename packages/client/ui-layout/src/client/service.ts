@@ -116,10 +116,12 @@ export class LayoutController implements ILayout {
       throw new Error(`layout.selectPanel: main panel "${panelId}" is not registered`)
     }
     this.navigation.abort()
-    // A phone shows the selected panel in a sheet over the conversation, so an
+    // A phone shows the selected surface in a sheet over the conversation, so an
     // open sidebar sheet must yield: both would otherwise cover the viewport,
-    // and the panel the caller asked for would stay behind the drawer.
-    if (panelId !== null && this.panelGeometry.getSnapshot().viewportWidth <= PANEL_SHEET_MAX) {
+    // and the surface the caller asked for would stay behind the drawer.
+    // Selecting the Conversation is the same request — the sheet covers it too,
+    // which is why tapping a Session row there must dismiss it.
+    if (this.panelGeometry.getSnapshot().viewportWidth <= PANEL_SHEET_MAX) {
       this.panels.collapseSidebar()
     }
     this.panels.selectPanel(panelId)
